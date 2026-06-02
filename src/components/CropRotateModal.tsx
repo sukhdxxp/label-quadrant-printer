@@ -5,9 +5,12 @@ import { CELL_W_MM, CELL_H_MM } from "../lib/placement";
 import { cropImage, type CropArea, type EditedImage } from "../lib/imageEditing";
 import type { EditorSource } from "../lib/fileLoading";
 import type { Rotation } from "../types";
+import { Button } from "./ui";
 
 const CELL_ASPECT = CELL_W_MM / CELL_H_MM;
-const MIN_ZOOM = 1;
+// Below 1x the image shrinks inside the frame, so an image whose aspect ratio
+// doesn't match the cell can be fit whole (with transparent padding around it).
+const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 4;
 
 interface Props {
@@ -49,124 +52,179 @@ export default function CropRotateModal({
   };
 
   return (
-    <div className="flex h-full w-full items-center justify-center p-4">
-      <div className="flex h-full max-h-[760px] w-full max-w-3xl flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-800">
-          Crop &amp; rotate
-        </h2>
-        <p className="mt-1 text-xs text-slate-500">
-          Drag to position, use the slider (or scroll/pinch) to zoom. Rotation is
-          baked into the label.
-        </p>
-
-        <div className="relative my-4 flex-1 overflow-hidden rounded-md bg-slate-900">
-          <Cropper
-            image={source.dataUrl}
-            crop={crop}
-            zoom={zoom}
-            minZoom={MIN_ZOOM}
-            maxZoom={MAX_ZOOM}
-            rotation={rotation}
-            aspect={locked ? CELL_ASPECT : undefined}
-            restrictPosition={false}
-            onCropChange={setCrop}
-            onZoomChange={setZoom}
-            onCropComplete={onCropComplete}
-          />
+    <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-4 sm:p-6">
+      <div className="view-enter flex max-h-full w-full max-w-3xl flex-col rounded-lg border border-border bg-surface shadow-popover">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-[1.125rem] font-semibold tracking-[-0.005em] text-ink">
+            Crop &amp; rotate
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-ink-secondary">
+            Drag to position, scroll or pinch to zoom. Rotation is baked into the
+            label.
+          </p>
         </div>
 
-        {/* Zoom slider */}
-        <div className="mb-3 flex items-center gap-3">
-          <span className="w-12 text-xs font-medium text-slate-600">Zoom</span>
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.max(MIN_ZOOM, +(z - 0.1).toFixed(2)))}
-            className="flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-slate-600 hover:bg-slate-50"
-            aria-label="Zoom out"
-          >
-            −
-          </button>
-          <input
-            type="range"
-            min={MIN_ZOOM}
-            max={MAX_ZOOM}
-            step={0.01}
-            value={zoom}
-            onChange={(e) => setZoom(Number(e.target.value))}
-            className="flex-1 accent-blue-600"
-            aria-label="Zoom"
-          />
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.min(MAX_ZOOM, +(z + 0.1).toFixed(2)))}
-            className="flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-slate-600 hover:bg-slate-50"
-            aria-label="Zoom in"
-          >
-            +
-          </button>
-          <span className="w-10 text-right text-xs tabular-nums text-slate-400">
-            {zoom.toFixed(1)}×
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
-            <button
-              type="button"
-              onClick={() => setLocked(true)}
-              className={`px-3 py-2 text-sm font-medium ${
-                locked
-                  ? "bg-blue-600 text-white"
-                  : "bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              Lock to label
-            </button>
-            <button
-              type="button"
-              onClick={() => setLocked(false)}
-              className={`px-3 py-2 text-sm font-medium ${
-                !locked
-                  ? "bg-blue-600 text-white"
-                  : "bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              Free
-            </button>
+        <div className="flex min-h-0 flex-col gap-4 p-5">
+          <div className="relative aspect-[4/3] min-h-[240px] w-full overflow-hidden rounded-md bg-ink">
+            <Cropper
+              image={source.dataUrl}
+              crop={crop}
+              zoom={zoom}
+              minZoom={MIN_ZOOM}
+              maxZoom={MAX_ZOOM}
+              rotation={rotation}
+              aspect={locked ? CELL_ASPECT : undefined}
+              restrictPosition={false}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={onCropComplete}
+            />
           </div>
 
-          <button
-            type="button"
-            onClick={rotate}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:border-blue-500 hover:bg-blue-50"
-          >
-            Rotate 90° ↻
-          </button>
+          {/* Zoom slider */}
+          <div className="flex items-center gap-3">
+            <span className="w-10 text-xs font-medium tracking-[0.01em] text-ink-secondary">
+              Zoom
+            </span>
+            <ZoomButton
+              label="Zoom out"
+              onClick={() =>
+                setZoom((z) => Math.max(MIN_ZOOM, +(z - 0.1).toFixed(2)))
+              }
+            >
+              <Minus />
+            </ZoomButton>
+            <input
+              type="range"
+              min={MIN_ZOOM}
+              max={MAX_ZOOM}
+              step={0.01}
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="h-1 flex-1 cursor-pointer accent-accent"
+              aria-label="Zoom"
+            />
+            <ZoomButton
+              label="Zoom in"
+              onClick={() =>
+                setZoom((z) => Math.min(MAX_ZOOM, +(z + 0.1).toFixed(2)))
+              }
+            >
+              <Plus />
+            </ZoomButton>
+            <span className="w-11 text-right font-mono text-[0.8125rem] tabular-nums text-ink-secondary">
+              {zoom.toFixed(1)}×
+            </span>
+          </div>
 
-          <span className="ml-auto text-xs text-slate-400">{rotation}°</span>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Aspect lock segmented control */}
+            <div
+              role="group"
+              aria-label="Crop aspect"
+              className="inline-flex gap-0.5 rounded-md bg-sunken p-0.5"
+            >
+              <SegItem active={locked} onClick={() => setLocked(true)}>
+                Lock to label
+              </SegItem>
+              <SegItem active={!locked} onClick={() => setLocked(false)}>
+                Free
+              </SegItem>
+            </div>
+
+            <Button variant="secondary" size="sm" onClick={rotate}>
+              Rotate 90°
+            </Button>
+
+            <span className="ml-auto font-mono text-[0.8125rem] tabular-nums text-ink-secondary">
+              {rotation}°
+            </span>
+          </div>
+
+          {error && <p className="text-xs text-danger">{error}</p>}
         </div>
 
-        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            className="rounded-md px-4 py-2 text-sm text-slate-500 hover:bg-slate-100 disabled:opacity-50"
-          >
+        <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
             onClick={confirm}
             disabled={busy || !area}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {busy ? "Processing…" : "Use this crop"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
+  );
+}
+
+function ZoomButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="grid size-7 shrink-0 place-items-center rounded-md border border-border-strong bg-surface text-ink-secondary transition-colors duration-150 ease-out-quart hover:bg-sunken hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+    >
+      {children}
+    </button>
+  );
+}
+
+function SegItem({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={[
+        "rounded-[6px] px-3 py-1.5 text-xs font-medium tracking-[0.01em] transition-colors duration-150 ease-out-quart focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent",
+        active
+          ? "bg-surface text-ink shadow-raised"
+          : "text-ink-secondary hover:text-ink",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Minus() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function Plus() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 5v14M5 12h14"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }

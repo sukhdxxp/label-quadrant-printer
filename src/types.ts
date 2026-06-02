@@ -1,3 +1,5 @@
+import type { EditorSource } from "./lib/fileLoading";
+
 export type Quadrant = 1 | 2 | 3 | 4;
 export type FitMode = "contain"; // V1: contain only
 export type Rotation = 0 | 90 | 180 | 270;
@@ -5,7 +7,7 @@ export type Rotation = 0 | 90 | 180 | 270;
 export interface LabelImage {
   id: string; // uuid
   quadrant: Quadrant;
-  file: File; // original
+  file: File; // baked crop, fed to the PDF + preview
   dataUrl: string; // preview rendering
   naturalWidth: number; // px
   naturalHeight: number; // px
@@ -13,6 +15,8 @@ export interface LabelImage {
   rotation: Rotation;
   offsetX: number; // mm fine-tune
   offsetY: number; // mm fine-tune
+  /** Original upload (normalised), kept so "Edit" re-crops from source. */
+  source: EditorSource;
 }
 
 export interface SheetState {

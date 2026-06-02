@@ -22,6 +22,7 @@ function makeImage(overrides: Partial<LabelImage> = {}): LabelImage {
     rotation: 0,
     offsetX: 0,
     offsetY: 0,
+    source: { dataUrl: "", fileName: "x.png", width: 396, height: 561 },
     ...overrides,
   };
 }

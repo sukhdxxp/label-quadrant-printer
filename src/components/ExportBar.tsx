@@ -1,18 +1,14 @@
 import { useState } from "react";
 import type { SheetState } from "../types";
-import {
-  download,
-  exportFilename,
-  generateCalibrationPdf,
-  generatePdf,
-} from "../lib/pdf";
+import { download, exportFilename, generatePdf, printPdf } from "../lib/pdf";
+import { Button } from "./ui";
 
 interface Props {
   state: SheetState;
 }
 
 export default function ExportBar({ state }: Props) {
-  const [busy, setBusy] = useState<null | "labels" | "calibration">(null);
+  const [busy, setBusy] = useState<null | "print" | "export">(null);
   const [error, setError] = useState<string | null>(null);
 
   const activeImages = state.images.filter(
@@ -20,9 +16,22 @@ export default function ExportBar({ state }: Props) {
   );
   const canExport = activeImages.length > 0;
 
-  const handleLabels = async () => {
+  const handlePrint = async () => {
     setError(null);
-    setBusy("labels");
+    setBusy("print");
+    try {
+      const bytes = await generatePdf(state);
+      await printPdf(bytes);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to print.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleExport = async () => {
+    setError(null);
+    setBusy("export");
     try {
       const bytes = await generatePdf(state);
       download(bytes, exportFilename());
@@ -33,45 +42,45 @@ export default function ExportBar({ state }: Props) {
     }
   };
 
-  const handleCalibration = async () => {
-    setError(null);
-    setBusy("calibration");
-    try {
-      const bytes = await generateCalibrationPdf();
-      download(bytes, "calibration-A4-4up.pdf");
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Failed to generate calibration sheet.",
-      );
-    } finally {
-      setBusy(null);
-    }
-  };
-
   return (
-    <div className="space-y-2">
-      <button
-        type="button"
-        onClick={handleLabels}
+    <div className="flex flex-col gap-2">
+      <Button
+        variant="primary"
+        onClick={handlePrint}
         disabled={!canExport || busy !== null}
-        className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        className="w-full"
       >
-        {busy === "labels" ? "Generating…" : "Generate PDF"}
-      </button>
-      <button
-        type="button"
-        onClick={handleCalibration}
-        disabled={busy !== null}
-        className="w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        <PrintIcon />
+        {busy === "print" ? "Preparing…" : "Print"}
+      </Button>
+      <Button
+        variant="secondary"
+        onClick={handleExport}
+        disabled={!canExport || busy !== null}
+        className="w-full"
       >
-        {busy === "calibration" ? "Generating…" : "Generate calibration sheet"}
-      </button>
+        {busy === "export" ? "Exporting…" : "Export PDF"}
+      </Button>
       {!canExport && (
-        <p className="text-xs text-slate-500">
-          Add at least one image to an enabled quadrant to export.
+        <p className="text-xs text-ink-secondary">
+          Add at least one image to an enabled quadrant to print or export.
         </p>
       )}
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
+  );
+}
+
+function PrintIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M6 14h12v7H6z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

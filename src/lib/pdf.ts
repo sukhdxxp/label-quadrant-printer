@@ -41,6 +41,52 @@ export function download(bytes: Uint8Array, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+/**
+ * Open the browser's print dialog for the given PDF bytes without downloading.
+ * The PDF is loaded into an offscreen iframe and printed from there; the iframe
+ * is cleaned up once printing is done.
+ */
+export function printPdf(bytes: Uint8Array): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText =
+      "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      iframe.remove();
+    };
+
+    iframe.onload = () => {
+      try {
+        const win = iframe.contentWindow;
+        if (!win) throw new Error("Could not open the document for printing.");
+        win.focus();
+        // Tidy up after the print dialog is dismissed.
+        win.addEventListener("afterprint", () => {
+          cleanup();
+          resolve();
+        });
+        win.print();
+        // Fallback cleanup if afterprint never fires (some browsers).
+        setTimeout(resolve, 1000);
+      } catch (e) {
+        cleanup();
+        reject(e instanceof Error ? e : new Error("Printing failed."));
+      }
+    };
+    iframe.onerror = () => {
+      cleanup();
+      reject(new Error("Could not load the document for printing."));
+    };
+
+    iframe.src = url;
+    document.body.appendChild(iframe);
+  });
+}
+
 /** Build the labels PDF for the current sheet state. */
 export async function generatePdf(state: SheetState): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();

@@ -38,41 +38,43 @@ export default function ImageDropzone({ onFileSelected, large }: Props) {
       <div
         {...getRootProps()}
         className={[
-          "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed text-center transition",
-          large ? "px-8 py-16" : "px-4 py-6",
+          "flex cursor-pointer flex-col items-center justify-center rounded-lg border-[1.5px] border-dashed text-center transition-colors duration-150 ease-out-quart focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+          large ? "gap-2 px-8 py-16" : "gap-1.5 px-4 py-7",
           isDragActive
-            ? "border-blue-500 bg-blue-50"
-            : "border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-slate-100",
+            ? "border-accent bg-accent-weak"
+            : "border-border bg-surface hover:border-accent hover:bg-accent-weak",
         ].join(" ")}
       >
         <input {...getInputProps()} />
-        {large && (
-          <svg
-            className="mb-3 h-10 w-10 text-slate-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.5}
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z"
-            />
-          </svg>
-        )}
+        <svg
+          className={[
+            "transition-colors duration-150 ease-out-quart",
+            large ? "size-7" : "size-6",
+            isDragActive ? "text-accent" : "text-ink-tertiary",
+          ].join(" ")}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 16V4" />
+          <path d="m7 9 5-5 5 5" />
+          <path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" />
+        </svg>
         <p
           className={[
-            "font-medium text-slate-700",
-            large ? "text-base" : "text-sm",
+            "font-semibold text-ink",
+            large ? "text-[0.9375rem]" : "text-sm",
           ].join(" ")}
         >
-          {isDragActive ? "Drop the file…" : "Drop file or click to upload"}
+          {isDragActive ? "Drop to upload" : "Drop file or click to upload"}
         </p>
-        <p className="mt-1 text-xs text-slate-500">PDF, PNG, JPG, WEBP…</p>
+        <p className="text-xs text-ink-secondary">PNG, JPG, WEBP, PDF</p>
       </div>
-      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
     </div>
   );
 }

@@ -33,7 +33,8 @@ async function loadPdfjs() {
 export async function renderPdfFirstPage(file: File): Promise<RenderedPdfPage> {
   const pdfjs = await loadPdfjs();
   const data = await file.arrayBuffer();
-  const doc = await pdfjs.getDocument({ data }).promise;
+  const loadingTask = pdfjs.getDocument({ data });
+  const doc = await loadingTask.promise;
   try {
     const page = await doc.getPage(1);
 
@@ -49,7 +50,7 @@ export async function renderPdfFirstPage(file: File): Promise<RenderedPdfPage> {
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Could not get canvas context for PDF render");
 
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    await page.render({ canvas, canvasContext: ctx, viewport }).promise;
 
     return {
       dataUrl: canvas.toDataURL("image/png"),
@@ -57,6 +58,6 @@ export async function renderPdfFirstPage(file: File): Promise<RenderedPdfPage> {
       height: canvas.height,
     };
   } finally {
-    await doc.destroy();
+    await loadingTask.destroy();
   }
 }

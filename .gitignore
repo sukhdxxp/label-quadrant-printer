@@ -1,8 +1,37 @@
+# Dependencies
 node_modules
+
+# Build output
 dist
 dist-ssr
-*.local
-.DS_Store
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Test coverage
+coverage
+
+# Vite cache
 .vite
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env / overrides
+*.local
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.idea
+.vscode
+
+# Tooling / deploy
 .claude
 .vercel

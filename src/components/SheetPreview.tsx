@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactElement } from "react";
 import type { Quadrant, SheetState } from "../types";
 import {
   CELL_H_MM,
@@ -12,12 +12,32 @@ interface Props {
   state: SheetState;
   selectedQuadrant: Quadrant;
   showRuler: boolean;
+  onSelectQuadrant: (q: Quadrant) => void;
 }
+
+/* Colors resolve from the @theme CSS variables via the `style` prop (CSS
+ * accepts var() and oklch(); SVG presentation attributes do not). */
+const C = {
+  surface: "var(--color-surface)",
+  borderStrong: "var(--color-border-strong)",
+  inkTertiary: "var(--color-ink-tertiary)",
+  accent: "var(--color-accent)",
+  accentWeak: "var(--color-accent-weak)",
+  danger: "var(--color-danger)",
+};
+
+const ORIGIN: Record<Quadrant, { x: number; y: number }> = {
+  1: { x: 0, y: 0 },
+  2: { x: CELL_W_MM, y: 0 },
+  3: { x: 0, y: CELL_H_MM },
+  4: { x: CELL_W_MM, y: CELL_H_MM },
+};
 
 export default function SheetPreview({
   state,
   selectedQuadrant,
   showRuler,
+  onSelectQuadrant,
 }: Props) {
   const placements = useMemo(
     () =>
@@ -29,16 +49,11 @@ export default function SheetPreview({
     [state.images, state.safetyMargin, state.disabledQuadrants],
   );
 
-  const selected = {
-    1: { x: 0, y: 0 },
-    2: { x: CELL_W_MM, y: 0 },
-    3: { x: 0, y: CELL_H_MM },
-    4: { x: CELL_W_MM, y: CELL_H_MM },
-  }[selectedQuadrant];
+  const selected = ORIGIN[selectedQuadrant];
 
   const rulerTicks = useMemo(() => {
     if (!showRuler) return null;
-    const ticks: JSX.Element[] = [];
+    const ticks: ReactElement[] = [];
     for (let x = 0; x <= PAGE_W_MM; x += 10) {
       ticks.push(
         <line
@@ -47,7 +62,7 @@ export default function SheetPreview({
           y1={0}
           x2={x}
           y2={x % 50 === 0 ? 4 : 2.5}
-          stroke="#94a3b8"
+          style={{ stroke: C.inkTertiary }}
           strokeWidth={0.2}
         />,
       );
@@ -60,7 +75,7 @@ export default function SheetPreview({
           y1={y}
           x2={y % 50 === 0 ? 4 : 2.5}
           y2={y}
-          stroke="#94a3b8"
+          style={{ stroke: C.inkTertiary }}
           strokeWidth={0.2}
         />,
       );
@@ -68,10 +83,42 @@ export default function SheetPreview({
     return ticks;
   }, [showRuler]);
 
+  const rulerLabels = useMemo(() => {
+    if (!showRuler) return null;
+    const labels: ReactElement[] = [];
+    for (let x = 50; x < PAGE_W_MM; x += 50) {
+      labels.push(
+        <text
+          key={`lx-${x}`}
+          x={x + 1.2}
+          y={4.4}
+          style={{ fill: C.inkTertiary, fontFamily: "var(--font-mono)" }}
+          fontSize={3.2}
+        >
+          {x}
+        </text>,
+      );
+    }
+    for (let y = 50; y < PAGE_H_MM; y += 50) {
+      labels.push(
+        <text
+          key={`ly-${y}`}
+          x={1.2}
+          y={y - 1.2}
+          style={{ fill: C.inkTertiary, fontFamily: "var(--font-mono)" }}
+          fontSize={3.2}
+        >
+          {y}
+        </text>,
+      );
+    }
+    return labels;
+  }, [showRuler]);
+
   return (
     <svg
       viewBox={`0 0 ${PAGE_W_MM} ${PAGE_H_MM}`}
-      className="block h-full w-full"
+      className="block size-full"
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label="A4 sheet preview"
@@ -84,7 +131,14 @@ export default function SheetPreview({
           patternUnits="userSpaceOnUse"
           patternTransform="rotate(45)"
         >
-          <line x1={0} y1={0} x2={0} y2={3} stroke="#ef4444" strokeWidth={0.5} />
+          <line
+            x1={0}
+            y1={0}
+            x2={0}
+            y2={3}
+            style={{ stroke: C.danger }}
+            strokeWidth={0.5}
+          />
         </pattern>
       </defs>
 
@@ -94,9 +148,17 @@ export default function SheetPreview({
         y={0}
         width={PAGE_W_MM}
         height={PAGE_H_MM}
-        fill="#ffffff"
-        stroke="#cbd5e1"
-        strokeWidth={0.3}
+        style={{ fill: C.surface, stroke: C.borderStrong }}
+        strokeWidth={0.4}
+      />
+
+      {/* selected-cell wash (drawn under images) */}
+      <rect
+        x={selected.x}
+        y={selected.y}
+        width={CELL_W_MM}
+        height={CELL_H_MM}
+        style={{ fill: C.accentWeak }}
       />
 
       {/* placed images */}
@@ -112,32 +174,24 @@ export default function SheetPreview({
             width={placement.contentW}
             height={placement.contentH}
             preserveAspectRatio="none"
-            opacity={disabled ? 0.25 : 1}
+            opacity={disabled ? 0.22 : 1}
             transform={`rotate(${-placement.rotation} ${cx} ${cy})`}
           />
         );
       })}
 
       {/* disabled quadrant hatch overlays */}
-      {state.disabledQuadrants.map((q) => {
-        const origin = {
-          1: { x: 0, y: 0 },
-          2: { x: CELL_W_MM, y: 0 },
-          3: { x: 0, y: CELL_H_MM },
-          4: { x: CELL_W_MM, y: CELL_H_MM },
-        }[q];
-        return (
-          <rect
-            key={`dis-${q}`}
-            x={origin.x}
-            y={origin.y}
-            width={CELL_W_MM}
-            height={CELL_H_MM}
-            fill="url(#hatch)"
-            opacity={0.4}
-          />
-        );
-      })}
+      {state.disabledQuadrants.map((q) => (
+        <rect
+          key={`dis-${q}`}
+          x={ORIGIN[q].x}
+          y={ORIGIN[q].y}
+          width={CELL_W_MM}
+          height={CELL_H_MM}
+          fill="url(#hatch)"
+          opacity={0.45}
+        />
+      ))}
 
       {/* dotted die-cut lines */}
       <line
@@ -145,7 +199,7 @@ export default function SheetPreview({
         y1={0}
         x2={CELL_W_MM}
         y2={PAGE_H_MM}
-        stroke="#64748b"
+        style={{ stroke: C.inkTertiary }}
         strokeWidth={0.3}
         strokeDasharray="2 2"
       />
@@ -154,26 +208,47 @@ export default function SheetPreview({
         y1={CELL_H_MM}
         x2={PAGE_W_MM}
         y2={CELL_H_MM}
-        stroke="#64748b"
+        style={{ stroke: C.inkTertiary }}
         strokeWidth={0.3}
         strokeDasharray="2 2"
       />
 
-      {/* optional ruler ticks */}
+      {/* optional ruler ticks + labels */}
       {rulerTicks}
+      {rulerLabels}
 
-      {/* highlighted ring on the selected quadrant */}
+      {/* selected-cell inner outline (on top) */}
       <rect
-        x={selected.x + 0.75}
-        y={selected.y + 0.75}
-        width={CELL_W_MM - 1.5}
-        height={CELL_H_MM - 1.5}
+        x={selected.x + 0.5}
+        y={selected.y + 0.5}
+        width={CELL_W_MM - 1}
+        height={CELL_H_MM - 1}
         fill="none"
-        stroke="#2563eb"
+        style={{ stroke: C.accent }}
         strokeWidth={1}
-        strokeDasharray="4 2"
         pointerEvents="none"
       />
+
+      {/* Pointer-only click targets to select a quadrant straight from the
+          sheet. Kept non-focusable (no focus ring on these large cells); the
+          sidebar selector is the keyboard-accessible control. */}
+      {(Object.keys(ORIGIN) as unknown as Quadrant[]).map((key) => {
+        const q = Number(key) as Quadrant;
+        return (
+          <rect
+            key={`hit-${q}`}
+            x={ORIGIN[q].x}
+            y={ORIGIN[q].y}
+            width={CELL_W_MM}
+            height={CELL_H_MM}
+            fill="transparent"
+            className="cursor-pointer"
+            onClick={() => onSelectQuadrant(q)}
+          >
+            <title>Select quadrant {q}</title>
+          </rect>
+        );
+      })}
     </svg>
   );
 }

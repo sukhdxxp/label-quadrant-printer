@@ -1,36 +1,33 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { loadImageFile, type LoadedImage } from "../lib/fileLoading";
 
 interface Props {
-  onImageLoaded: (file: File, loaded: LoadedImage) => void;
+  onFileSelected: (file: File) => void;
 }
 
-export default function ImageDropzone({ onImageLoaded }: Props) {
+export default function ImageDropzone({ onFileSelected }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const onDrop = useCallback(
-    async (accepted: File[], rejected: { file: File }[]) => {
+    (accepted: File[], rejected: { file: File }[]) => {
       setError(null);
       if (rejected.length > 0) {
-        setError("Only PNG or JPG files are supported.");
+        setError("Only PDF or image files are supported.");
         return;
       }
       const file = accepted[0];
       if (!file) return;
-      try {
-        const loaded = await loadImageFile(file);
-        onImageLoaded(file, loaded);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not read image.");
-      }
+      onFileSelected(file);
     },
-    [onImageLoaded],
+    [onFileSelected],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "image/png": [".png"], "image/jpeg": [".jpg", ".jpeg"] },
+    accept: {
+      "application/pdf": [".pdf"],
+      "image/*": [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"],
+    },
     multiple: false,
   });
 
@@ -47,9 +44,9 @@ export default function ImageDropzone({ onImageLoaded }: Props) {
       >
         <input {...getInputProps()} />
         <p className="text-sm font-medium text-slate-700">
-          {isDragActive ? "Drop the image…" : "Drop image or click to upload"}
+          {isDragActive ? "Drop the file…" : "Drop file or click to upload"}
         </p>
-        <p className="mt-1 text-xs text-slate-500">PNG or JPG</p>
+        <p className="mt-1 text-xs text-slate-500">PDF, PNG, JPG…</p>
       </div>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </div>

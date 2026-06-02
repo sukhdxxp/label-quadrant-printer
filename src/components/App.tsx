@@ -1,10 +1,16 @@
 import { useCallback, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { LabelImage, Quadrant, SheetState } from "../types";
-import type { LoadedImage } from "../lib/fileLoading";
+import {
+  prepareSourceForEditor,
+  type EditorSource,
+  type LoadedImage,
+} from "../lib/fileLoading";
+import type { EditedImage } from "../lib/imageEditing";
 import SheetPreview from "./SheetPreview";
 import QuadrantSelector from "./QuadrantSelector";
 import ImageDropzone from "./ImageDropzone";
+import CropRotateModal from "./CropRotateModal";
 import ImageControls from "./ImageControls";
 import MarginControl from "./MarginControl";
 import ExportBar from "./ExportBar";
@@ -24,6 +30,9 @@ export default function App() {
     file: File;
     loaded: LoadedImage;
   } | null>(null);
+  const [editorSource, setEditorSource] = useState<EditorSource | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const occupied = state.images.map((i) => i.quadrant);
 
@@ -65,6 +74,33 @@ export default function App() {
       }
     },
     [occupied, selectedQuadrant, placeImage],
+  );
+
+  // Step 1: an uploaded file (PDF or image) is normalised into an editor source.
+  const handleFileSelected = useCallback(async (file: File) => {
+    setUploadError(null);
+    setPreparing(true);
+    try {
+      const source = await prepareSourceForEditor(file);
+      setEditorSource(source);
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Could not read file.");
+    } finally {
+      setPreparing(false);
+    }
+  }, []);
+
+  // Step 3: the cropped + rotated PNG enters the existing placement flow.
+  const handleEdited = useCallback(
+    (edited: EditedImage) => {
+      onImageLoaded(edited.file, {
+        dataUrl: edited.dataUrl,
+        naturalWidth: edited.naturalWidth,
+        naturalHeight: edited.naturalHeight,
+      });
+      setEditorSource(null);
+    },
+    [onImageLoaded],
   );
 
   const updateImage = (id: string, patch: Partial<LabelImage>) =>
@@ -121,9 +157,15 @@ export default function App() {
 
           <section>
             <h2 className="mb-2 text-sm font-semibold text-slate-800">
-              2 · Upload image
+              2 · Upload file
             </h2>
-            <ImageDropzone onImageLoaded={onImageLoaded} />
+            <ImageDropzone onFileSelected={handleFileSelected} />
+            {preparing && (
+              <p className="mt-2 text-xs text-slate-500">Preparing file…</p>
+            )}
+            {uploadError && (
+              <p className="mt-2 text-xs text-red-600">{uploadError}</p>
+            )}
           </section>
 
           {selectedImage && (
@@ -174,6 +216,15 @@ export default function App() {
           </div>
         </main>
       </div>
+
+      {/* Crop & rotate editor (shown after a file is uploaded) */}
+      {editorSource && (
+        <CropRotateModal
+          source={editorSource}
+          onConfirm={handleEdited}
+          onCancel={() => setEditorSource(null)}
+        />
+      )}
 
       {/* Quadrant picker modal (shown when target is occupied) */}
       {pending && (

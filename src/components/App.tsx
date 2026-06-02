@@ -7,6 +7,7 @@ import {
   type LoadedImage,
 } from "../lib/fileLoading";
 import type { EditedImage } from "../lib/imageEditing";
+import { bestFitRotation } from "../lib/placement";
 import SheetPreview from "./SheetPreview";
 import QuadrantSelector from "./QuadrantSelector";
 import CropRotateModal from "./CropRotateModal";
@@ -73,6 +74,15 @@ export default function App() {
     ) => {
       setState((prev) => {
         const existing = prev.images.find((i) => i.quadrant === quadrant);
+        // Fresh upload: auto-rotate a landscape crop to fill the portrait cell.
+        // Re-edit: keep whatever rotation the user already dialled in.
+        const rotation = advance
+          ? bestFitRotation(
+              loaded.naturalWidth,
+              loaded.naturalHeight,
+              prev.safetyMargin,
+            )
+          : existing?.rotation ?? 0;
         const next: LabelImage = {
           id: uuidv4(),
           quadrant,
@@ -82,8 +92,8 @@ export default function App() {
           naturalHeight: loaded.naturalHeight,
           fit: "contain",
           source,
+          rotation,
           // preserved fields (or defaults on first placement)
-          rotation: existing?.rotation ?? 0,
           offsetX: existing?.offsetX ?? 0,
           offsetY: existing?.offsetY ?? 0,
         };

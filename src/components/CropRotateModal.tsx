@@ -1,11 +1,29 @@
-import { useCallback, useState } from "react";
-import Cropper from "react-easy-crop";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Cropper, { type Area } from "react-easy-crop";
 import "react-easy-crop/react-easy-crop.css";
 import { CELL_W_MM, CELL_H_MM } from "../lib/placement";
 import { cropImage, type CropArea, type EditedImage } from "../lib/imageEditing";
+import { detectLabelBox, type NormalizedBox } from "../lib/labelDetect";
 import type { EditorSource } from "../lib/fileLoading";
 import type { Rotation } from "../types";
 import { Button } from "./ui";
+
+type DetectState =
+  | { status: "detecting" }
+  | { status: "applied" }
+  | { status: "found"; box: NormalizedBox } // detected but not applied (user was editing)
+  | { status: "none" }
+  | { status: "idle" };
+
+/** react-easy-crop reads the initial crop area as percentages of the image. */
+function boxToPercent(box: NormalizedBox): Area {
+  return {
+    x: box.x * 100,
+    y: box.y * 100,
+    width: box.width * 100,
+    height: box.height * 100,
+  };
+}
 
 const CELL_ASPECT = CELL_W_MM / CELL_H_MM;
 // Below 1x the image shrinks inside the frame, so an image whose aspect ratio
@@ -32,11 +50,53 @@ export default function CropRotateModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Auto label detection. The detected box pre-fills the crop frame via a
+  // Cropper remount keyed by `initialArea`; it snaps automatically only if the
+  // user hasn't started adjusting yet.
+  const [detect, setDetect] = useState<DetectState>({ status: "idle" });
+  const [initialArea, setInitialArea] = useState<Area | undefined>(undefined);
+  const [cropperKey, setCropperKey] = useState(0);
+  const touched = useRef(false);
+
+  const applyBox = useCallback((box: NormalizedBox) => {
+    // The detected box is in the unrotated frame, so reset rotation and unlock
+    // the aspect to honour the label's exact shape.
+    setRotation(0);
+    setLocked(false);
+    setInitialArea(boxToPercent(box));
+    setCropperKey((k) => k + 1);
+    setDetect({ status: "applied" });
+  }, []);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    touched.current = false;
+    setDetect({ status: "detecting" });
+    detectLabelBox(source.dataUrl, ac.signal).then((box) => {
+      if (ac.signal.aborted) return;
+      if (!box) {
+        setDetect({ status: "none" });
+      } else if (touched.current) {
+        setDetect({ status: "found", box }); // let the user opt in via button
+      } else {
+        applyBox(box);
+      }
+    });
+    return () => ac.abort();
+  }, [source.dataUrl, applyBox]);
+
+  const markTouched = useCallback(() => {
+    touched.current = true;
+  }, []);
+
   const onCropComplete = useCallback((_: unknown, areaPixels: CropArea) => {
     setArea(areaPixels);
   }, []);
 
-  const rotate = () => setRotation((r) => (((r + 90) % 360) as Rotation));
+  const rotate = () => {
+    markTouched();
+    setRotation((r) => (((r + 90) % 360) as Rotation));
+  };
 
   const confirm = async () => {
     if (!area) return;
@@ -67,6 +127,7 @@ export default function CropRotateModal({
         <div className="flex min-h-0 flex-col gap-4 p-5">
           <div className="relative aspect-[4/3] min-h-[240px] w-full overflow-hidden rounded-md bg-ink">
             <Cropper
+              key={cropperKey}
               image={source.dataUrl}
               crop={crop}
               zoom={zoom}
@@ -74,12 +135,26 @@ export default function CropRotateModal({
               maxZoom={MAX_ZOOM}
               rotation={rotation}
               aspect={locked ? CELL_ASPECT : undefined}
+              initialCroppedAreaPercentages={initialArea}
               restrictPosition={false}
+              onInteractionStart={markTouched}
               onCropChange={setCrop}
               onZoomChange={setZoom}
               onCropComplete={onCropComplete}
             />
           </div>
+
+          <DetectStatus
+            detect={detect}
+            onApply={(box) => applyBox(box)}
+            onRetry={() => {
+              touched.current = false;
+              setDetect({ status: "detecting" });
+              detectLabelBox(source.dataUrl).then((box) =>
+                box ? applyBox(box) : setDetect({ status: "none" }),
+              );
+            }}
+          />
 
           {/* Zoom slider */}
           <div className="flex items-center gap-3">
@@ -88,9 +163,10 @@ export default function CropRotateModal({
             </span>
             <ZoomButton
               label="Zoom out"
-              onClick={() =>
-                setZoom((z) => Math.max(MIN_ZOOM, +(z - 0.1).toFixed(2)))
-              }
+              onClick={() => {
+                markTouched();
+                setZoom((z) => Math.max(MIN_ZOOM, +(z - 0.1).toFixed(2)));
+              }}
             >
               <Minus />
             </ZoomButton>
@@ -100,15 +176,19 @@ export default function CropRotateModal({
               max={MAX_ZOOM}
               step={0.01}
               value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
+              onChange={(e) => {
+                markTouched();
+                setZoom(Number(e.target.value));
+              }}
               className="h-1 flex-1 cursor-pointer accent-accent"
               aria-label="Zoom"
             />
             <ZoomButton
               label="Zoom in"
-              onClick={() =>
-                setZoom((z) => Math.min(MAX_ZOOM, +(z + 0.1).toFixed(2)))
-              }
+              onClick={() => {
+                markTouched();
+                setZoom((z) => Math.min(MAX_ZOOM, +(z + 0.1).toFixed(2)));
+              }}
             >
               <Plus />
             </ZoomButton>
@@ -124,10 +204,22 @@ export default function CropRotateModal({
               aria-label="Crop aspect"
               className="inline-flex gap-0.5 rounded-md bg-sunken p-0.5"
             >
-              <SegItem active={locked} onClick={() => setLocked(true)}>
+              <SegItem
+                active={locked}
+                onClick={() => {
+                  markTouched();
+                  setLocked(true);
+                }}
+              >
                 Lock to label
               </SegItem>
-              <SegItem active={!locked} onClick={() => setLocked(false)}>
+              <SegItem
+                active={!locked}
+                onClick={() => {
+                  markTouched();
+                  setLocked(false);
+                }}
+              >
                 Free
               </SegItem>
             </div>
@@ -158,6 +250,99 @@ export default function CropRotateModal({
         </div>
       </div>
     </div>
+  );
+}
+
+function DetectStatus({
+  detect,
+  onApply,
+  onRetry,
+}: {
+  detect: DetectState;
+  onApply: (box: NormalizedBox) => void;
+  onRetry: () => void;
+}) {
+  if (detect.status === "idle") return null;
+
+  return (
+    <div className="flex min-h-[1.5rem] flex-wrap items-center gap-2 text-xs">
+      {detect.status === "detecting" && (
+        <span className="inline-flex items-center gap-1.5 text-ink-secondary">
+          <Spinner />
+          Detecting label…
+        </span>
+      )}
+
+      {detect.status === "applied" && (
+        <span className="inline-flex items-center gap-1.5 text-success">
+          <Check />
+          Snapped to detected label — adjust if needed.
+        </span>
+      )}
+
+      {detect.status === "found" && (
+        <>
+          <span className="text-ink-secondary">Label detected.</span>
+          <button
+            type="button"
+            onClick={() => onApply(detect.box)}
+            className="font-medium text-accent underline-offset-2 hover:underline"
+          >
+            Use detected crop
+          </button>
+        </>
+      )}
+
+      {detect.status === "none" && (
+        <>
+          <span className="text-ink-secondary">
+            No label detected — crop manually.
+          </span>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="font-medium text-accent underline-offset-2 hover:underline"
+          >
+            Try again
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className="animate-spin"
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+      <path
+        d="M21 12a9 9 0 0 0-9-9"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function Check() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M5 13l4 4L19 7"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

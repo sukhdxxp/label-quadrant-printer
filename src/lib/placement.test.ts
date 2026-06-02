@@ -3,6 +3,7 @@ import {
   placeInQuadrant,
   pdfDrawParams,
   pxToMm,
+  bestFitRotation,
   CELL_W_MM,
   CELL_H_MM,
   PAGE_H_MM,
@@ -138,5 +139,44 @@ describe("pdfDrawParams", () => {
     const params = pdfDrawParams(p);
     approx(params.width, p.contentW);
     approx(params.height, p.contentH);
+  });
+});
+
+describe("bestFitRotation", () => {
+  it("rotates a landscape crop to fill the portrait cell", () => {
+    // The detected DHL label crop: ~550×352 px (landscape) -> a quarter turn.
+    const r = bestFitRotation(550, 352, 2);
+    expect(r === 90 || r === 270).toBe(true);
+  });
+
+  it("leaves a portrait label upright", () => {
+    expect(bestFitRotation(396, 561, 2)).toBe(0);
+  });
+
+  it("does not rotate a square-ish image (ties stay at 0)", () => {
+    expect(bestFitRotation(500, 500, 2)).toBe(0);
+  });
+
+  it("verifies the rotated orientation actually contains larger", () => {
+    const margin = 2;
+    const w = 550;
+    const h = 352;
+    const r = bestFitRotation(w, h, margin);
+    const upright = placeInQuadrant(
+      { ...makeImage({ naturalWidth: w, naturalHeight: h, rotation: 0 }) },
+      margin,
+    );
+    const rotated = placeInQuadrant(
+      { ...makeImage({ naturalWidth: w, naturalHeight: h, rotation: r }) },
+      margin,
+    );
+    // chosen rotation should print at least as large a content area
+    const areaUpright = upright.contentW * upright.contentH;
+    const areaRotated = rotated.contentW * rotated.contentH;
+    expect(areaRotated).toBeGreaterThanOrEqual(areaUpright);
+  });
+
+  it("returns 0 for degenerate sizes", () => {
+    expect(bestFitRotation(0, 100, 2)).toBe(0);
   });
 });

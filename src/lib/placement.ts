@@ -28,6 +28,37 @@ export const QUADRANT_ORIGIN: Record<Quadrant, { x: number; y: number }> = {
 
 const isRotatedSideways = (r: Rotation): boolean => r === 90 || r === 270;
 
+// Direction used when a landscape crop is turned upright into the portrait cell.
+// 90° vs 270° fill the cell identically, so the choice is purely about which way
+// is right-side-up. Carrier "label + instructions" PDFs print the label sideways
+// with its top toward the page's left edge, so a quarter-turn counter-clockwise
+// (270° in this app's clockwise-positive convention) lands it upright. It's a
+// best-effort default — if a given label comes out inverted, one tap of the
+// Rotate control flips it.
+const FIT_ROTATION: Rotation = 270;
+
+/**
+ * Pick the orientation (0° or {@link FIT_ROTATION}) that lets an image of the
+ * given pixel size fill more of a cell under contain-fit — i.e. auto-rotate a
+ * landscape crop into the portrait cell when that prints it bigger. Returns 0 on
+ * ties so normal portrait labels are never rotated. `margin` is the safety
+ * margin in mm.
+ */
+export function bestFitRotation(
+  naturalWidth: number,
+  naturalHeight: number,
+  margin: number,
+): Rotation {
+  if (naturalWidth <= 0 || naturalHeight <= 0) return 0;
+  const uw = CELL_W_MM - 2 * margin;
+  const uh = CELL_H_MM - 2 * margin;
+  const iw = pxToMm(naturalWidth);
+  const ih = pxToMm(naturalHeight);
+  const scale0 = Math.min(uw / iw, uh / ih);
+  const scale90 = Math.min(uw / ih, uh / iw);
+  return scale90 > scale0 ? FIT_ROTATION : 0;
+}
+
 // ---------------------------------------------------------------------------
 // Core placement — the single source of truth used by both the SVG preview
 // and PDF export. Given an image and the global safety margin, compute where
